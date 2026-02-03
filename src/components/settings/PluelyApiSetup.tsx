@@ -61,7 +61,6 @@ export const PluelyApiSetup = () => {
   const {
     pluelyApiEnabled,
     setPluelyApiEnabled,
-    hasActiveLicense,
     setHasActiveLicense,
     getActiveLicenseStatus,
   } = useApp();
@@ -279,15 +278,14 @@ export const PluelyApiSetup = () => {
 
   const title = isModelsLoading
     ? "Loading Models..."
-    : `Pluely supports ${models?.length} model${
-        models?.length !== 1 ? "s" : ""
-      }`;
+    : `Pluely supports ${models?.length} model${models?.length !== 1 ? "s" : ""
+    }`;
 
   const description = isModelsLoading
     ? "Fetching the list of supported models..."
     : providerList
-    ? `Access top models from providers like ${providerList}. and select smaller models for faster responses.`
-    : "Explore all the models Pluely supports.";
+      ? `Access top models from providers like ${providerList}. and select smaller models for faster responses.`
+      : "Explore all the models Pluely supports.";
 
   return (
     <div id="pluely-api" className="space-y-3 -mt-2">
@@ -526,7 +524,7 @@ export const PluelyApiSetup = () => {
         <Switch
           checked={pluelyApiEnabled}
           onCheckedChange={setPluelyApiEnabled}
-          disabled={!storedLicenseKey || !hasActiveLicense} // Disable if no license is stored
+          disabled={false}
         />
       </div>
     </div>

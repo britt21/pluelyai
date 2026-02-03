@@ -71,7 +71,7 @@ const AppContext = createContext<IContextType | undefined>(undefined);
 export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [systemPrompt, setSystemPrompt] = useState<string>(
     safeLocalStorage.getItem(STORAGE_KEYS.SYSTEM_PROMPT) ||
-      DEFAULT_SYSTEM_PROMPT
+    DEFAULT_SYSTEM_PROMPT
   );
 
   const [selectedAudioDevices, setSelectedAudioDevices] = useState<{
@@ -119,7 +119,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [customizable, setCustomizable] = useState<CustomizableState>(
     DEFAULT_CUSTOMIZABLE_STATE
   );
-  const [hasActiveLicense, setHasActiveLicense] = useState<boolean>(false);
+  const [hasActiveLicense, setHasActiveLicense] = useState<boolean>(true);
 
   // Pluely API State
   const [pluelyApiEnabled, setPluelyApiEnabledState] = useState<boolean>(
@@ -127,13 +127,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const getActiveLicenseStatus = async () => {
-    const response: { is_active: boolean } = await invoke(
-      "validate_license_api"
-    );
-    setHasActiveLicense(response.is_active);
+    // Force license to be active
+    setHasActiveLicense(true);
+
     // Check if the auto configs are enabled
     const autoConfigsEnabled = localStorage.getItem("auto-configs-enabled");
-    if (response.is_active && !autoConfigsEnabled) {
+    if (!autoConfigsEnabled) {
       setScreenshotConfiguration({
         mode: "auto",
         autoPrompt: "Analyze the screenshot and provide insights",

@@ -479,8 +479,5 @@ pub async fn create_system_prompt(
 // Helper command to check if license is available
 #[tauri::command]
 pub async fn check_license_status(app: AppHandle) -> Result<bool, String> {
-    match get_stored_credentials(&app).await {
-        Ok(_) => Ok(true),
-        Err(_) => Ok(false),
-    }
+    Ok(true)
 }

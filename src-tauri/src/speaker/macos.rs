@@ -58,9 +58,10 @@ impl SpeakerInput {
         let tap_desc = ca::TapDesc::with_mono_global_tap_excluding_processes(&ns::Array::new());
         let tap = tap_desc.create_process_tap()?;
 
+        let tap_uid = tap.uid().map_err(|e| anyhow::anyhow!("Failed to get tap UID: {}", e))?;
         let sub_tap = cf::DictionaryOf::with_keys_values(
             &[ca::sub_device_keys::uid()],
-            &[tap.uid().unwrap().as_type_ref()],
+            &[tap_uid.as_type_ref()],
         );
 
         let agg_desc = cf::DictionaryOf::with_keys_values(
@@ -102,7 +103,10 @@ impl SpeakerInput {
             _output_time: &cat::AudioTimeStamp,
             ctx: Option<&mut Ctx>,
         ) -> os::Status {
-            let ctx = ctx.unwrap();
+            let ctx = match ctx {
+                Some(c) => c,
+                None => return os::Status::NO_ERR,
+            };
 
             ctx.current_sample_rate.store(
                 device
@@ -140,10 +144,10 @@ impl SpeakerInput {
         Ok(started_device)
     }
 
-    pub fn stream(self) -> SpeakerStream {
-        let asbd = self.tap.asbd().unwrap();
+    pub fn stream(self) -> Result<SpeakerStream> {
+        let asbd = self.tap.asbd().map_err(|e| anyhow::anyhow!("Failed to get tap ASBD: {}", e))?;
 
-        let format = av::AudioFormat::with_asbd(&asbd).unwrap();
+        let format = av::AudioFormat::with_asbd(&asbd).ok_or_else(|| anyhow::anyhow!("Failed to create audio format"))?;
 
         let buffer_size = 1024 * 128;
         let rb = HeapRb::<f32>::new(buffer_size);
@@ -165,16 +169,16 @@ impl SpeakerInput {
             should_terminate: Arc::new(AtomicBool::new(false)),
         });
 
-        let device = self.start_device(&mut ctx).unwrap();
+        let device = self.start_device(&mut ctx)?;
 
-        SpeakerStream {
+        Ok(SpeakerStream {
             consumer,
             _device: device,
             _ctx: ctx,
             _tap: self.tap,
             waker_state,
             current_sample_rate,
-        }
+        })
     }
 }
 
@@ -203,11 +207,16 @@ fn process_audio_data(ctx: &mut Ctx, data: &[f32]) {
 
     // Wake up consumer if we have new data
     let should_wake = {
-        let mut waker_state = ctx.waker_state.lock().unwrap();
-        if !waker_state.has_data {
-            waker_state.has_data = true;
-            waker_state.waker.take()
+        if let Ok(mut waker_state) = ctx.waker_state.lock() {
+            if !waker_state.has_data {
+                waker_state.has_data = true;
+                waker_state.waker.take()
+            } else {
+                None
+            }
         } else {
+            // Lock poisoned - nothing we can do but ignore it to avoid crashing
+            eprintln!("Critical: Audio lock poisoned");
             None
         }
     };
@@ -235,8 +244,7 @@ impl Stream for SpeakerStream {
             };
         }
 
-        {
-            let mut state = self.waker_state.lock().unwrap();
+        if let Ok(mut state) = self.waker_state.lock() {
             state.has_data = false;
             state.waker = Some(cx.waker().clone());
         }

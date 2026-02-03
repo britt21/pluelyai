@@ -4,14 +4,20 @@ import App from "./App";
 import Overlay from "./components/Overlay";
 import { AppProvider, ThemeProvider } from "./contexts";
 import "./global.css";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 
-const currentWindow = getCurrentWindow();
-const windowLabel = currentWindow.label;
+let windowLabel = "main";
 
-// Render different components based on window label
+try {
+  // Only available inside Tauri
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  const currentWindow = getCurrentWindow();
+  windowLabel = currentWindow.label;
+} catch (e) {
+  console.warn("Tauri APIs not available – running in browser mode");
+}
+
+// Render components
 if (windowLabel === "capture-overlay") {
-  // Render overlay without providers
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <React.StrictMode>
       <Overlay />

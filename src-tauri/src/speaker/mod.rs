@@ -59,9 +59,9 @@ impl SpeakerInput {
 
     // Starts the audio stream.
     #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
-    pub fn stream(self) -> SpeakerStream {
-        let inner = self.inner.stream();
-        SpeakerStream { inner }
+    pub fn stream(self) -> Result<SpeakerStream> {
+        let inner = self.inner.stream()?;
+        Ok(SpeakerStream { inner })
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
