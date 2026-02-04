@@ -31,29 +31,29 @@ pub struct SpeakerInput {
 impl SpeakerInput {
     // Creates a new speaker input. Fails on unsupported platforms.
     #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
-    pub fn new() -> Result<Self> {
+    pub async fn new() -> Result<Self> {
         eprintln!("[DEBUG] speaker::mod::SpeakerInput::new called");
-        let inner = PlatformSpeakerInput::new(None)?;
+        let inner = PlatformSpeakerInput::new(None).await?;
         Ok(Self { inner })
     }
 
     // Creates a new speaker input with a specific device ID
     #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
-    pub fn new_with_device(device_id: Option<String>) -> Result<Self> {
+    pub async fn new_with_device(device_id: Option<String>) -> Result<Self> {
         eprintln!("[DEBUG] SpeakerInput::new_with_device called");
-        let inner = PlatformSpeakerInput::new(device_id)?;
+        let inner = PlatformSpeakerInput::new(device_id).await?;
         Ok(Self { inner })
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-    pub fn new() -> Result<Self> {
+    pub async fn new() -> Result<Self> {
         Err(anyhow::anyhow!(
             "SpeakerInput::new is not supported on this platform"
         ))
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-    pub fn new_with_device(_device_id: Option<String>) -> Result<Self> {
+    pub async fn new_with_device(_device_id: Option<String>) -> Result<Self> {
         Err(anyhow::anyhow!(
             "SpeakerInput::new_with_device is not supported on this platform"
         ))
@@ -61,13 +61,14 @@ impl SpeakerInput {
 
     // Starts the audio stream.
     #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
-    pub fn stream(self) -> Result<SpeakerStream> {
-        let inner = self.inner.stream()?;
+    pub async fn stream(self) -> Result<SpeakerStream> {
+        let SpeakerInput { inner } = self;
+        let inner = inner.stream().await?;
         Ok(SpeakerStream { inner })
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-    pub fn stream(self) -> SpeakerStream {
+    pub async fn stream(self) -> SpeakerStream {
         unimplemented!("SpeakerInput::stream is not supported on this platform")
     }
 }

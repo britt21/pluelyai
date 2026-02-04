@@ -73,12 +73,12 @@ pub async fn start_system_audio_capture(
         *vad_cfg = config;
     }
 
-    let input = SpeakerInput::new_with_device(device_id).map_err(|e| {
+    let input = SpeakerInput::new_with_device(device_id).await.map_err(|e| {
         error!("Failed to create speaker input: {}", e);
         format!("Failed to access system audio: {}", e)
     })?;
     
-    let stream = input.stream().map_err(|e| {
+    let stream = input.stream().await.map_err(|e| {
         error!("Failed to start audio stream: {}", e);
         format!("Failed to start audio stream: {}", e)
     })?;
@@ -486,7 +486,7 @@ pub async fn manual_stop_continuous(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn check_system_audio_access(_app: AppHandle) -> Result<bool, String> {
+pub async fn check_system_audio_access(_app: AppHandle) -> Result<bool, String> {
     eprintln!("[DEBUG] check_system_audio_access called");
     #[cfg(target_os = "macos")]
     {
@@ -502,7 +502,7 @@ pub fn check_system_audio_access(_app: AppHandle) -> Result<bool, String> {
         }
     }
 
-    match SpeakerInput::new() {
+    match SpeakerInput::new().await {
         Ok(_) => {
             Ok(true)
         }
@@ -596,14 +596,14 @@ pub async fn get_capture_status(app: AppHandle) -> Result<bool, String> {
 }
 
 #[tauri::command]
-pub fn get_audio_sample_rate(_app: AppHandle) -> Result<u32, String> {
-    let input = SpeakerInput::new()
+pub async fn get_audio_sample_rate(_app: AppHandle) -> Result<u32, String> {
+    let input = SpeakerInput::new().await
         .map_err(|e| {
             error!("Failed to create speaker input: {}", e);
             format!("Failed to access system audio: {}", e)
         })?;
     
-    let stream = input.stream().map_err(|e| {
+    let stream = input.stream().await.map_err(|e| {
         error!("Failed to start audio stream for sample rate check: {}", e);
         format!("Failed to start audio stream: {}", e)
     })?;

@@ -4,6 +4,8 @@ use std::sync::{Arc, Mutex};
 use std::task::{Poll, Waker};
 use anyhow::Result;
 use futures_util::Stream;
+use tokio::sync::oneshot;
+use tokio::time::{timeout, Duration};
 use ringbuf::{
     traits::{Consumer, Producer, Split},
     HeapCons, HeapProd, HeapRb,
@@ -91,6 +93,12 @@ pub enum SpeakerStreamInner {
 unsafe impl Send for SpeakerStream {}
 unsafe impl Sync for SpeakerStream {}
 
+unsafe impl Send for SpeakerInput {}
+unsafe impl Sync for SpeakerInput {}
+
+unsafe impl Send for SpeakerInputInner {}
+unsafe impl Sync for SpeakerInputInner {}
+
 struct Ctx {
     format: arc::R<av::AudioFormat>,
     producer: Mutex<HeapProd<f32>>,
@@ -99,12 +107,17 @@ struct Ctx {
     consecutive_drops: Arc<AtomicU32>,
     should_terminate: Arc<AtomicBool>,
 }
+unsafe impl Send for Ctx {}
+unsafe impl Sync for Ctx {}
 
 define_obj_type!(
     pub SpeakerAudioOutput + OutputImpl,
     Arc<Ctx>,
     PluelySpeakerAudioOutput
 );
+
+unsafe impl Send for SpeakerAudioOutput {}
+unsafe impl Sync for SpeakerAudioOutput {}
 
 impl Output for SpeakerAudioOutput {}
 
@@ -145,21 +158,21 @@ impl SpeakerStream {
 
 
 impl SpeakerInput {
-    pub fn new(_device_id: Option<String>) -> Result<Self> {
+    pub async fn new(_device_id: Option<String>) -> Result<Self> {
         eprintln!("[DEBUG] macos::SpeakerInput::new entry");
         let version = MacVersion::current();
         eprintln!("[DEBUG] Detected macOS version: {:?}", version);
         
         if version.supports_ca_tap() {
             eprintln!("[DEBUG] Using CATap for audio capture");
-            Self::new_tap()
+            Self::new_tap().await
         } else {
             eprintln!("[DEBUG] Using SCStream fallback for audio capture");
-            Self::new_sc_stream()
+            Self::new_sc_stream().await
         }
     }
 
-    fn new_tap() -> Result<Self> {
+    async fn new_tap() -> Result<Self> {
         eprintln!("[DEBUG] Setting up CATap configuration...");
         let output_device = ca::System::default_output_device()?;
         let output_uid = output_device.uid()?;
@@ -204,16 +217,21 @@ impl SpeakerInput {
         Ok(Self { inner: SpeakerInputInner::Tap { tap, agg_desc } })
     }
 
-    fn new_sc_stream() -> Result<Self> {
+    async fn new_sc_stream() -> Result<Self> {
         eprintln!("[DEBUG] Setting up SCStream fallback...");
-        // Fallback for macOS 13 using ScreenCaptureKit
-        let (tx, rx) = std::sync::mpsc::channel();
+        
+        let (tx, rx) = oneshot::channel();
+        let mut tx = Some(tx);
         sc::ShareableContent::current_with_ch(move |content, err| {
-            tx.send((content.map(|c| c.retained()), err.map(|e| e.retained()))).ok();
+            if let Some(tx) = tx.take() {
+                let _ = tx.send((content.map(|c| c.retained()), err.map(|e| e.retained())));
+            }
         });
         
-        let (content, err) = rx.recv_timeout(std::time::Duration::from_secs(5))
-            .map_err(|_| anyhow::anyhow!("Timeout getting shareable content"))?;
+        let (content, err) = timeout(Duration::from_secs(5), rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Timeout getting shareable content"))?
+            .map_err(|_| anyhow::anyhow!("Channel closed"))?;
             
         if let Some(err) = err {
              return Err(anyhow::anyhow!("Failed to get shareable content: {:?}", err));
@@ -229,7 +247,6 @@ impl SpeakerInput {
         config.set_sample_rate(48000);
         config.set_channel_count(1);
         config.set_excludes_current_process_audio(true);
-        // Set basic dimensions even if not used, some SCStream versions are picky
         config.set_width(1280);
         config.set_height(720);
         config.set_minimum_frame_interval(cm::Time::with_secs(1.0 / 60.0, 600));
@@ -292,7 +309,7 @@ impl SpeakerInput {
         Ok(started_device)
     }
 
-    pub fn stream(self) -> Result<SpeakerStream> {
+    pub async fn stream(self) -> Result<SpeakerStream> {
         let buffer_size = 1024 * 128;
         let rb = HeapRb::<f32>::new(buffer_size);
         let (producer, consumer) = rb.split();
@@ -357,16 +374,23 @@ impl SpeakerInput {
                 stream.add_stream_output(output.as_ref(), sc::OutputType::Audio, Some(&queue)).map_err(|e| anyhow::anyhow!("Failed to add stream output: {:?}", e))?;
                 eprintln!("[DEBUG] SCStream output added");
                 
-                // We use a completion handler to wait for start
-                let (tx, rx) = std::sync::mpsc::channel();
+                let (tx, rx) = oneshot::channel();
+                let mut tx = Some(tx);
                 let stream_to_start = stream.retained();
                 eprintln!("[DEBUG] Starting SCStream...");
                 stream_to_start.start_with_ch(move |err| {
                     eprintln!("[DEBUG] SCStream start completion called, error: {:?}", err);
-                    tx.send(err.map(|e| e.retained())).ok();
+                    if let Some(tx) = tx.take() {
+                        let _ = tx.send(err.map(|e| e.retained()));
+                    }
                 });
                 
-                if let Ok(Some(err)) = rx.recv_timeout(std::time::Duration::from_secs(5)) {
+                let start_err = timeout(Duration::from_secs(5), rx)
+                    .await
+                    .map_err(|_| anyhow::anyhow!("Timeout starting SCStream"))?
+                    .map_err(|_| anyhow::anyhow!("Channel closed"))?;
+
+                if let Some(err) = start_err {
                     eprintln!("[DEBUG] SCStream start failed: {:?}", err);
                     return Err(anyhow::anyhow!("Failed to start SCStream: {:?}", err));
                 }
@@ -390,9 +414,6 @@ impl SpeakerInput {
 
 
 fn process_audio_data(ctx: &Ctx, data: &[f32]) {
-    static mut PEAK: f32 = 0.0;
-    static mut COUNT: usize = 0;
-    
     let mut current_peak = 0.0;
     for &sample in data {
         let abs = sample.abs();
@@ -401,12 +422,13 @@ fn process_audio_data(ctx: &Ctx, data: &[f32]) {
         }
     }
     
-    unsafe {
-        if current_peak > PEAK { PEAK = current_peak; }
-        COUNT += 1;
-        if COUNT % 100 == 0 {
-            eprintln!("[DEBUG] Audio level - Peak: {:.4}, Buffer size: {}", PEAK, data.len());
-            PEAK = 0.0;
+    // Debug log periodically without unsafe static mut
+    static LAST_LOG: AtomicU64 = AtomicU64::new(0);
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+    let last = LAST_LOG.load(Ordering::Relaxed);
+    if now > last {
+        if LAST_LOG.compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+            eprintln!("[DEBUG] Audio level - Peak: {:.4}, Buffer size: {}", current_peak, data.len());
         }
     }
 

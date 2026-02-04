@@ -18,12 +18,12 @@ pub struct SpeakerInput {
 }
 
 impl SpeakerInput {
-    pub fn new(device_id: Option<String>) -> Result<Self> {
+    pub async fn new(device_id: Option<String>) -> Result<Self> {
         // For Linux, device_id is the PulseAudio source name
         Ok(Self { source_name: device_id })
     }
 
-    pub fn stream(self) -> SpeakerStream {
+    pub async fn stream(self) -> Result<SpeakerStream> {
         let sample_queue = Arc::new(Mutex::new(VecDeque::new()));
         let waker_state = Arc::new(Mutex::new(WakerState {
             waker: None,
@@ -47,24 +47,24 @@ impl SpeakerInput {
             }
         });
 
-        let sample_rate = match init_rx.recv() {
+        let sample_rate = match init_rx.recv_timeout(std::time::Duration::from_secs(5)) {
             Ok(Ok(sr)) => sr,
             Ok(Err(e)) => {
                 eprintln!("Audio initialization failed: {}", e);
-                0
+                return Err(anyhow!("Initialization failed: {}", e));
             }
             Err(e) => {
                 eprintln!("Failed to receive audio init signal: {}", e);
-                0
+                return Err(anyhow!("Initialization timeout: {}", e));
             }
         };
 
-        SpeakerStream {
+        Ok(SpeakerStream {
             sample_queue,
             waker_state,
             capture_thread: Some(capture_thread),
             sample_rate,
-        }
+        })
     }
 }
 

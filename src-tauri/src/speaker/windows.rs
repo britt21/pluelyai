@@ -14,7 +14,7 @@ pub struct SpeakerInput {
 }
 
 impl SpeakerInput {
-    pub fn new(device_id: Option<String>) -> Result<Self> {
+    pub async fn new(device_id: Option<String>) -> Result<Self> {
         let device_index = device_id.and_then(|id| {
             id.strip_prefix("windows_output_")
                 .and_then(|s| s.parse::<usize>().ok())
@@ -24,7 +24,7 @@ impl SpeakerInput {
     }
 
     // Starts the audio stream
-    pub fn stream(self) -> SpeakerStream {
+    pub async fn stream(self) -> Result<SpeakerStream> {
         let sample_queue = Arc::new(Mutex::new(VecDeque::new()));
         let waker_state = Arc::new(Mutex::new(WakerState {
             waker: None,
@@ -47,20 +47,20 @@ impl SpeakerInput {
             Ok(Ok(rate)) => rate,
             Ok(Err(e)) => {
                 error!("Pluely Audio initialization failed: {}", e);
-                44100
+                return Err(anyhow::anyhow!("Initialization failed: {}", e));
             }
             Err(_) => {
                 error!("Pluely Audio initialization timeout");
-                44100
+                return Err(anyhow::anyhow!("Initialization timeout"));
             }
         };
 
-        SpeakerStream {
+        Ok(SpeakerStream {
             sample_queue,
             waker_state,
             capture_thread: Some(capture_thread),
             actual_sample_rate,
-        }
+        })
     }
 }
 
