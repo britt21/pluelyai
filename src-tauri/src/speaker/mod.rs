@@ -32,6 +32,7 @@ impl SpeakerInput {
     // Creates a new speaker input. Fails on unsupported platforms.
     #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
     pub fn new() -> Result<Self> {
+        eprintln!("[DEBUG] speaker::mod::SpeakerInput::new called");
         let inner = PlatformSpeakerInput::new(None)?;
         Ok(Self { inner })
     }
@@ -39,6 +40,7 @@ impl SpeakerInput {
     // Creates a new speaker input with a specific device ID
     #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
     pub fn new_with_device(device_id: Option<String>) -> Result<Self> {
+        eprintln!("[DEBUG] SpeakerInput::new_with_device called");
         let inner = PlatformSpeakerInput::new(device_id)?;
         Ok(Self { inner })
     }

@@ -51,6 +51,7 @@ pub async fn start_system_audio_capture(
     vad_config: Option<VadConfig>,
     device_id: Option<String>,
 ) -> Result<(), String> {
+    eprintln!("[DEBUG] start_system_audio_capture called with device_id: {:?}", device_id);
 
     let state = app.state::<crate::AudioState>();
     
@@ -103,11 +104,13 @@ pub async fn start_system_audio_capture(
     
     let state_clone = app.state::<crate::AudioState>();
     let task = tokio::spawn(async move {
+        eprintln!("[DEBUG] Audio capture task spawned");
         if vad_config.enabled {
             run_vad_capture(app_clone.clone(), stream, sr, vad_config).await;
         } else {
             run_continuous_capture(app_clone.clone(), stream, sr, vad_config).await;
         }
+        eprintln!("[DEBUG] Audio capture task finished");
         
         let state = app_clone.state::<crate::AudioState>();
         {
@@ -483,7 +486,22 @@ pub async fn manual_stop_continuous(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn check_system_audio_access(_app: AppHandle) -> Result<bool, String> {    
+pub fn check_system_audio_access(_app: AppHandle) -> Result<bool, String> {
+    eprintln!("[DEBUG] check_system_audio_access called");
+    #[cfg(target_os = "macos")]
+    {
+        // On macOS 14.4+, Screen Recording permission is required for system audio capture via Tap.
+        // CGPreflightScreenCaptureAccess is a lightweight check that doesn't trigger a prompt.
+        extern "C" {
+            fn CGPreflightScreenCaptureAccess() -> bool;
+        }
+        unsafe {
+            if CGPreflightScreenCaptureAccess() {
+                return Ok(true);
+            }
+        }
+    }
+
     match SpeakerInput::new() {
         Ok(_) => {
             Ok(true)
@@ -501,7 +519,7 @@ pub async fn request_system_audio_access(app: AppHandle) -> Result<(), String> {
     {
         app.shell()
             .command("open")
-            .args(["x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture"])
+            .args(["x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"])
             .spawn()
             .map_err(|e| {
                 error!("Failed to open system preferences: {}", e);
