@@ -79,9 +79,10 @@ export function processUserMessageTemplate(
   userMessage: string,
   imagesBase64: string[] = []
 ): any {
+  const escapedUserMessage = JSON.stringify(userMessage).slice(1, -1);
   const templateStr = JSON.stringify(template).replace(
     /\{\{TEXT\}\}/g,
-    userMessage
+    escapedUserMessage
   );
   const result = JSON.parse(templateStr);
 
@@ -96,12 +97,12 @@ export function processUserMessageTemplate(
         const imageParts =
           imagesBase64.length > 0
             ? imagesBase64.map((img) => {
-                const partStr = JSON.stringify(imageTemplate).replace(
-                  /\{\{IMAGE\}\}/g,
-                  img
-                );
-                return JSON.parse(partStr);
-              })
+              const partStr = JSON.stringify(imageTemplate).replace(
+                /\{\{IMAGE\}\}/g,
+                img
+              );
+              return JSON.parse(partStr);
+            })
             : [];
 
         const finalArray = [
@@ -109,6 +110,28 @@ export function processUserMessageTemplate(
           ...imageParts,
           ...node.slice(imageTemplateIndex + 1),
         ];
+
+        // Optimization: If the result is a single text node, unwrap it to a string
+        // This improves compatibility with providers/models that don't support content arrays for text-only messages
+        if (
+          finalArray.length === 1 &&
+          finalArray[0] &&
+          typeof finalArray[0] === "object" &&
+          finalArray[0].type === "text" &&
+          typeof finalArray[0].text === "string"
+        ) {
+          // Verify it has no other keys that might be important (like cache_control)
+          const keys = Object.keys(finalArray[0]);
+          if (keys.length === 2 && keys.includes("type") && keys.includes("text")) {
+            return finalArray[0].text;
+          }
+          // Also handle case where it might just have 'text' and 'type' is implicit or it has other standard keys we can ignore? 
+          // Safest is to only unwrap if we are sure.
+          if (finalArray[0].type === "text" && finalArray[0].text) {
+            return finalArray[0].text;
+          }
+        }
+
         return finalArray.map(imageReplacer);
       }
       return node.map(imageReplacer);

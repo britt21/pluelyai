@@ -405,7 +405,7 @@ export const useCompletion = () => {
         state.conversationHistory.length === 0
           ? generateConversationTitle(userMessage)
           : existingConversation?.title ||
-            generateConversationTitle(userMessage);
+          generateConversationTitle(userMessage);
 
       const conversation: ChatConversation = {
         id: conversationId,
@@ -507,7 +507,7 @@ export const useCompletion = () => {
 
     files.forEach((file) => {
       if (
-        file.type.startsWith("image/") &&
+        (file.type.startsWith("image/") || file.type === "application/pdf") &&
         state.attachedFiles.length < MAX_FILES
       ) {
         addFile(file);
@@ -581,10 +581,40 @@ export const useCompletion = () => {
               return;
             }
 
+            // Perform OCR if in Auto mode or if needed
+            let ocrText = "";
+            let finalImagesBase64 = [base64];
+
+            try {
+              // We attempt OCR. If it succeeds, we append the text.
+              // For users with text-only models (like Groq Llama 3 8b), we should prioritize text over image.
+              const extractedText = await invoke<string>("extract_text_from_image", { base64Image: base64 });
+
+              if (extractedText && extractedText.trim().length > 0) {
+                ocrText = extractedText.trim();
+                // Optimize: If we have text, we can choose to NOT send the image if the model is text-only? 
+                // But we don't know the model capabilty here easily without checking settings.
+                // However, the user specifically complained about "instead of analysing... send the text".
+                // So we will append the text.
+                const separator = prompt ? "\n\n" : "";
+                prompt = (prompt || "") + separator + "[Detected Text from Screenshot]:\n" + ocrText;
+
+                // CRITICAL FIX: If we successfully extracted text, we omit the image from the payload 
+                // to prevent 400 errors on text-only models (like Groq Llama 3).
+                // We only keep the image if we are clearly using a Vision model, but we can't detect that easily.
+                // Given the user's specific request "analysing the image text using ocr and send the text", 
+                // removing the image is the safest default for "Auto" mode when OCR works.
+                finalImagesBase64 = [];
+              }
+            } catch (e) {
+              console.warn("OCR Failed:", e);
+              // If OCR fails, we fallback to sending the image (standard behavior)
+            }
+
             // Clear previous response and set loading state
             setState((prev) => ({
               ...prev,
-              input: prompt,
+              input: prompt || "", // Fix: ensure it's a string
               isLoading: true,
               error: null,
               response: "",
@@ -597,7 +627,7 @@ export const useCompletion = () => {
               systemPrompt: systemPrompt || undefined,
               history: messageHistory,
               userMessage: prompt,
-              imagesBase64: [base64],
+              imagesBase64: finalImagesBase64,
               signal,
             })) {
               // Only update if this is still the current request

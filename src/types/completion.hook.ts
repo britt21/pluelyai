@@ -47,6 +47,7 @@ export interface UseCompletionReturn {
   /** Function to clear all attached files */
   clearFiles: () => void;
 
+
   // Completion actions
   /** Function to submit the completion request, optionally with speech text */
   submit: (speechText?: string) => Promise<void>;

@@ -1,4 +1,4 @@
-import { Loader2, XIcon } from "lucide-react";
+import { Loader2, XIcon, Paperclip } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -34,6 +34,7 @@ export const Input = ({
   isHidden,
   keepEngaged,
   setKeepEngaged,
+  handleFileSelect,
 }: UseCompletionReturn & { isHidden: boolean }) => {
   return (
     <div className="relative flex-1">
@@ -55,12 +56,36 @@ export const Input = ({
               onKeyPress={handleKeyPress}
               onPaste={handlePaste}
               disabled={isLoading || isHidden}
-              className={`${
-                currentConversationId && conversationHistory.length > 0
-                  ? "pr-14"
-                  : "pr-2"
-              }`}
+              className={`pl-10 ${currentConversationId && conversationHistory.length > 0
+                ? "pr-14"
+                : "pr-2"
+                } transition-all duration-200`}
             />
+
+            {/* Attachment Button */}
+            <div className="absolute left-1 top-1/2 -translate-y-1/2 z-10">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 hover:bg-muted/50 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  document.getElementById("file-upload-input")?.click();
+                }}
+                disabled={isLoading}
+                title="Attach file (Image or PDF)"
+              >
+                <Paperclip className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
+              </Button>
+              <input
+                id="file-upload-input"
+                type="file"
+                className="hidden"
+                multiple
+                accept="image/*,application/pdf"
+                onChange={handleFileSelect}
+              />
+            </div>
 
             {/* Conversation thread indicator */}
             {currentConversationId &&
@@ -104,9 +129,8 @@ export const Input = ({
             </div>
             <div className="flex items-center gap-2 select-none">
               <div className="flex flex-row items-center gap-2 mr-2">
-                <p className="text-sm">{`Toggle ${
-                  keepEngaged ? "AI response" : "conversation mode"
-                }`}</p>
+                <p className="text-sm">{`Toggle ${keepEngaged ? "AI response" : "conversation mode"
+                  }`}</p>
                 <span className="text-xs text-muted-foreground/60 bg-muted/30 px-1 py-0 rounded border border-input/50">
                   {navigator.platform.toLowerCase().includes("mac")
                     ? "⌘"
@@ -144,8 +168,8 @@ export const Input = ({
                   isLoading
                     ? "Cancel loading"
                     : keepEngaged
-                    ? "Close and start new conversation"
-                    : "Clear conversation"
+                      ? "Close and start new conversation"
+                      : "Clear conversation"
                 }
               >
                 <XIcon />
@@ -180,11 +204,10 @@ export const Input = ({
                       return (
                         <div
                           key={message.id}
-                          className={`p-3 rounded-lg text-sm ${
-                            message.role === "user"
-                              ? "bg-primary/10 border-l-4 border-primary"
-                              : "bg-muted/50"
-                          }`}
+                          className={`p-3 rounded-lg text-sm ${message.role === "user"
+                            ? "bg-primary/10 border-l-4 border-primary"
+                            : "bg-muted/50"
+                            }`}
                         >
                           <div className="flex items-center gap-2 mb-2">
                             <span className="text-xs font-medium text-muted-foreground uppercase">

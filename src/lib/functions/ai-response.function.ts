@@ -183,8 +183,7 @@ export async function* fetchAIResponse(params: {
       curlJson = curl2Json(provider.curl);
     } catch (error) {
       throw new Error(
-        `Failed to parse curl: ${
-          error instanceof Error ? error.message : "Unknown error"
+        `Failed to parse curl: ${error instanceof Error ? error.message : "Unknown error"
         }`
       );
     }
@@ -277,9 +276,8 @@ export async function* fetchAIResponse(params: {
       ) {
         return; // Silently return on abort
       }
-      yield `Network error during API request: ${
-        fetchError instanceof Error ? fetchError.message : "Unknown error"
-      }`;
+      yield `Network error during API request: ${fetchError instanceof Error ? fetchError.message : "Unknown error"
+        }`;
       return;
     }
 
@@ -287,10 +285,22 @@ export async function* fetchAIResponse(params: {
       let errorText = "";
       try {
         errorText = await response.text();
-      } catch {}
-      yield `API request failed: ${response.status} ${response.statusText}${
-        errorText ? ` - ${errorText}` : ""
-      }`;
+      } catch { }
+
+      let finalErrorMessage = `API request failed: ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ""
+        }`;
+
+      // Helpful hint for Groq/OpenAI "content must be a string" error when sending images
+      if (
+        response.status === 400 &&
+        imagesBase64.length > 0 &&
+        (errorText.includes("content must be a string") || errorText.includes("invalid_request_error"))
+      ) {
+        finalErrorMessage +=
+          "\n\n💡 TIP: You are trying to send an image (screenshot) to a model that only accepts text. Please switch to a Vision-capable model (e.g., llama-3.2-11b-vision-preview for Groq).";
+      }
+
+      yield finalErrorMessage;
       return;
     }
 
@@ -299,9 +309,8 @@ export async function* fetchAIResponse(params: {
       try {
         json = await response.json();
       } catch (parseError) {
-        yield `Failed to parse non-streaming response: ${
-          parseError instanceof Error ? parseError.message : "Unknown error"
-        }`;
+        yield `Failed to parse non-streaming response: ${parseError instanceof Error ? parseError.message : "Unknown error"
+          }`;
         return;
       }
       const content =
@@ -337,9 +346,8 @@ export async function* fetchAIResponse(params: {
         ) {
           return; // Silently return on abort
         }
-        yield `Error reading stream: ${
-          readError instanceof Error ? readError.message : "Unknown error"
-        }`;
+        yield `Error reading stream: ${readError instanceof Error ? readError.message : "Unknown error"
+          }`;
         return;
       }
       const { done, value } = readResult;
@@ -376,8 +384,7 @@ export async function* fetchAIResponse(params: {
     }
   } catch (error) {
     throw new Error(
-      `Error in fetchAIResponse: ${
-        error instanceof Error ? error.message : "Unknown error"
+      `Error in fetchAIResponse: ${error instanceof Error ? error.message : "Unknown error"
       }`
     );
   }
