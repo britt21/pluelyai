@@ -188,6 +188,8 @@ export async function* fetchAIResponse(params: {
       );
     }
 
+    //TEST NET
+
     const extractedVariables = extractVariables(provider.curl);
     const requiredVars = extractedVariables.filter(
       ({ key }) => key !== "SYSTEM_PROMPT" && key !== "TEXT" && key !== "IMAGE"

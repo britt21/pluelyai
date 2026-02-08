@@ -16,40 +16,13 @@ import {
 } from "@/lib";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-
-// Types for completion
-interface AttachedFile {
-  id: string;
-  name: string;
-  type: string;
-  base64: string;
-  size: number;
-}
-
-interface ChatMessage {
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  timestamp: number;
-}
-
-interface ChatConversation {
-  id: string;
-  title: string;
-  messages: ChatMessage[];
-  createdAt: number;
-  updatedAt: number;
-}
-
-interface CompletionState {
-  input: string;
-  response: string;
-  isLoading: boolean;
-  error: string | null;
-  attachedFiles: AttachedFile[];
-  currentConversationId: string | null;
-  conversationHistory: ChatMessage[];
-}
+import type {
+  AttachedFile,
+  ChatMessage,
+  ChatConversation,
+  CompletionState,
+  Message,
+} from "@/types";
 
 export const useCompletion = () => {
   const {
@@ -160,12 +133,45 @@ export const useCompletion = () => {
 
       try {
         // Prepare message history for the AI
-        const messageHistory = state.conversationHistory.map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        }));
+        // Convert ChatMessage[] to Message[] format, handling attachedFiles
+        const messageHistory: Message[] = state.conversationHistory.map((msg) => {
+          // If the message has attached image files, convert to content array format
+          if (msg.attachedFiles && msg.attachedFiles.length > 0) {
+            const imageFiles = msg.attachedFiles.filter(f => f.type.startsWith("image/"));
 
-        // Handle image attachments
+            if (imageFiles.length > 0) {
+              // Create content array with text + images
+              const content: Array<{
+                type: string;
+                text?: string;
+                image_url?: { url: string };
+              }> = [
+                  { type: "text", text: msg.content }
+                ];
+
+              // Add image parts
+              imageFiles.forEach(file => {
+                content.push({
+                  type: "image_url",
+                  image_url: { url: `data:${file.type};base64,${file.base64}` }
+                });
+              });
+
+              return {
+                role: msg.role,
+                content
+              };
+            }
+          }
+
+          // No images, return simple string content
+          return {
+            role: msg.role,
+            content: msg.content
+          };
+        });
+
+        // Handle image attachments from current input
         const imagesBase64: string[] = [];
         if (state.attachedFiles.length > 0) {
           state.attachedFiles.forEach((file) => {
@@ -378,6 +384,7 @@ export const useCompletion = () => {
         role: "user",
         content: userMessage,
         timestamp,
+        attachedFiles: _attachedFiles.length > 0 ? _attachedFiles : undefined,
       };
 
       const assistantMsg: ChatMessage = {
@@ -553,10 +560,43 @@ export const useCompletion = () => {
 
           try {
             // Prepare message history for the AI
-            const messageHistory = state.conversationHistory.map((msg) => ({
-              role: msg.role,
-              content: msg.content,
-            }));
+            // Convert ChatMessage[] to Message[] format, handling attachedFiles
+            const messageHistory: Message[] = state.conversationHistory.map((msg) => {
+              // If the message has attached image files, convert to content array format
+              if (msg.attachedFiles && msg.attachedFiles.length > 0) {
+                const imageFiles = msg.attachedFiles.filter(f => f.type.startsWith("image/"));
+
+                if (imageFiles.length > 0) {
+                  // Create content array with text + images
+                  const content: Array<{
+                    type: string;
+                    text?: string;
+                    image_url?: { url: string };
+                  }> = [
+                      { type: "text", text: msg.content }
+                    ];
+
+                  // Add image parts
+                  imageFiles.forEach(file => {
+                    content.push({
+                      type: "image_url",
+                      image_url: { url: `data:${file.type};base64,${file.base64}` }
+                    });
+                  });
+
+                  return {
+                    role: msg.role,
+                    content
+                  };
+                }
+              }
+
+              // No images, return simple string content
+              return {
+                role: msg.role,
+                content: msg.content
+              };
+            });
 
             let fullResponse = "";
 

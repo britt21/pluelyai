@@ -63,3 +63,8 @@ try? handler.perform([request])
     let text = String::from_utf8_lossy(&output.stdout).to_string();
     Ok(text.trim().to_string())
 }
+
+
+//OKAY BOTHEIN
+//SXXXS
+//

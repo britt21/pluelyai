@@ -23,6 +23,7 @@ import { ShortcutManager } from "./shortcuts";
 import Theme from "./Theme";
 import { SettingsNavigation } from "./SettingsNavigation";
 import { CursorSelection } from "./Cursor";
+import { KillSwitch } from "./KillSwitch";
 
 export const Settings = () => {
   const settings = useSettings();
@@ -93,6 +94,9 @@ export const Settings = () => {
 
             {/* STT Providers */}
             <STTProviders {...settings} />
+
+            {/* Kill Switch */}
+            <KillSwitch />
 
             {/* Delete Chat History */}
             <DeleteChats {...settings} />

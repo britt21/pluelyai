@@ -33,11 +33,11 @@ export const CONVERSATION_SAVE_DEBOUNCE_MS = 500;
  *
  * How frequently to check for new streaming chunks from Pluely API.
  *
- * 50ms provides smooth streaming without excessive CPU usage.
+ * 1ms provides extremely fast, near-instant streaming display.
  * Lower = more responsive but higher CPU usage
  * Higher = lower CPU but choppier streaming
  */
-export const CHUNK_POLL_INTERVAL_MS = 50;
+export const CHUNK_POLL_INTERVAL_MS = 1;
 
 /**
  * DOWNLOAD_SUCCESS_DISPLAY_MS
